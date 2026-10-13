@@ -7,3 +7,4 @@ can redo it without rediscovering every wall.
 | # | Date | Entry |
 |---|---|---|
 | 01 | 2026-10-13 | [A Wi-Fi key that grew](01-a-wifi-key-that-grew.md) |
+| 02 | 2026-10-13 | [Keys that explain themselves](02-keys-that-explain-themselves.md) |
