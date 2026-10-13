@@ -1,0 +1,14 @@
+{
+  "name": "mac-vitals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stream Deck keys for my Mac's vital signs: CPU, memory, network speed, ping, and a Wi-Fi network switch",
+  "dependencies": {
+    "@elgato/streamdeck": "3.0.1"
+  },
+  "scripts": {
+    "check": "for f in src/*.js test/*.js; do node --check \"$f\" || exit 1; done",
+    "test": "node --test test/*.test.js"
+  }
+}

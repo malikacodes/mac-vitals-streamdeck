@@ -1,0 +1,118 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "UUID": "com.malikacodes.mac-vitals",
+  "Name": "Mac Vitals",
+  "Author": "Malika Pixels",
+  "Description": "My Mac's vital signs on keys: CPU, memory, network speed and ping, plus a key that switches Wi-Fi network.",
+  "Version": "0.1.0.0",
+  "SDKVersion": 3,
+  "CodePath": "bin/plugin.js",
+  "Icon": "imgs/plugin",
+  "CategoryIcon": "imgs/pulse",
+  "Category": "Mac Vitals",
+  "Nodejs": {
+    "Version": "24"
+  },
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "13"
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "com.malikacodes.mac-vitals.switch",
+      "Name": "Switch Network",
+      "Tooltip": "Press to join the next network in the list",
+      "Icon": "imgs/wifi",
+      "Controllers": [
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "PropertyInspectorPath": "ui/switch.html",
+      "States": [
+        {
+          "Image": "imgs/wifi-key"
+        }
+      ]
+    },
+    {
+      "UUID": "com.malikacodes.mac-vitals.cpu",
+      "Name": "CPU",
+      "Tooltip": "How busy the processor is, with the last minute as a graph",
+      "Icon": "imgs/pulse",
+      "Controllers": [
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "States": [
+        {
+          "Image": "imgs/pulse-key"
+        }
+      ]
+    },
+    {
+      "UUID": "com.malikacodes.mac-vitals.memory",
+      "Name": "Memory",
+      "Tooltip": "Memory in use, the same number as Activity Monitor",
+      "Icon": "imgs/pulse",
+      "Controllers": [
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "States": [
+        {
+          "Image": "imgs/pulse-key"
+        }
+      ]
+    },
+    {
+      "UUID": "com.malikacodes.mac-vitals.down",
+      "Name": "Download",
+      "Tooltip": "How fast data is coming in right now",
+      "Icon": "imgs/pulse",
+      "Controllers": [
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "States": [
+        {
+          "Image": "imgs/pulse-key"
+        }
+      ]
+    },
+    {
+      "UUID": "com.malikacodes.mac-vitals.up",
+      "Name": "Upload",
+      "Tooltip": "How fast data is going out right now",
+      "Icon": "imgs/pulse",
+      "Controllers": [
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "States": [
+        {
+          "Image": "imgs/pulse-key"
+        }
+      ]
+    },
+    {
+      "UUID": "com.malikacodes.mac-vitals.ping",
+      "Name": "Ping",
+      "Tooltip": "How long the internet takes to answer",
+      "Icon": "imgs/pulse",
+      "Controllers": [
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "States": [
+        {
+          "Image": "imgs/pulse-key"
+        }
+      ]
+    }
+  ]
+}

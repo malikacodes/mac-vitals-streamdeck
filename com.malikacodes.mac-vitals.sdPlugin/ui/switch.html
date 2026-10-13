@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- Elgato's settings components. Each one saves into this key's
+         settings under the name in "setting". -->
+    <script src="sdpi-components.js"></script>
+  </head>
+  <body>
+    <!-- This box saves after every letter, so the plugin sees half-typed
+         names on the way. That's fine here: the list is only used to
+         draw the key and on a press, and nothing is saved per name. -->
+    <sdpi-item label="Networks">
+      <sdpi-textarea setting="networks" rows="5" placeholder="One per line, spelled exactly like in the Wi-Fi menu"></sdpi-textarea>
+    </sdpi-item>
+    <sdpi-item label="Short names">
+      <span>For a long name, add what the key should say: <code>My Very Long Network Name = Home</code></span>
+    </sdpi-item>
+  </body>
+</html>
