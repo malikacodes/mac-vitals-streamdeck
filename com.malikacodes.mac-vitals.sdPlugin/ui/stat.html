@@ -2,9 +2,9 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <!-- Elgato's settings components. This page has nothing to set: it
-         only uses them for the rows, so it looks like every other
-         settings page. -->
+    <!-- Elgato's settings components. Most of this page is sentences, and
+         it uses the components for the rows so it looks like every
+         other settings page. -->
     <script src="sdpi-components.js"></script>
     <!-- The rows here hold sentences, not text boxes, so they need a
          little room. The top padding lines the first line of words up
@@ -42,6 +42,15 @@
     </sdpi-item>
     <sdpi-item label="If it's off">
       <div class="words" id="todo"></div>
+    </sdpi-item>
+    <sdpi-item label="A press">
+      <div class="words">Opens the Mac Vitals page, with all the readings together, on the deck picked here.</div>
+    </sdpi-item>
+    <!-- The one real setting on this page. The plugin fills the menu
+         with the decks that are plugged in, and the refresh button asks
+         again after I plug one in. -->
+    <sdpi-item label="Open on">
+      <sdpi-select setting="openOn" datasource="getDecks" default="here" show-refresh></sdpi-select>
     </sdpi-item>
 
     <script src="stat.js"></script>

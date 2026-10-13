@@ -24,6 +24,12 @@ the number is fine, and what to do if it isn't.
 These pictures are drawn by the plugin's own drawing code, not
 photographed off the deck. The network names in them are made up.
 
+A press on any of the five stat keys opens the whole Mac Vitals page.
+So one of them can live on another page and be the door to the rest.
+Each key's settings have an "Open on" menu for which deck the page
+opens on: Memory sits on my XL's Home page and brings the page up on my
+Stream Deck +.
+
 ## The Wi-Fi key
 
 ![The Wi-Fi key on a network, joining, joined, with no password, on another network, and off](journal/assets/01-a-wifi-key-that-grew/switch.png)

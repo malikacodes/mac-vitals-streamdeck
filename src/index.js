@@ -4,6 +4,7 @@
 import streamDeck, { action, SingletonAction } from "@elgato/streamdeck";
 import { drawKey, drawStat, HISTORY } from "./draw.js";
 import { explain } from "./explain.js";
+import { deckChoices, whereToOpen } from "./pages.js";
 import { readVitals, STATS, words } from "./vitals.js";
 import { join, nextNetwork, parseNetworks, readWifi, whichNetwork } from "./wifi.js";
 
@@ -179,8 +180,29 @@ class StatKey extends SingletonAction {
     }
   }
 
-  // The settings page asks for its words when it opens.
+  // A press opens the whole Mac Vitals page. It's for a stat key living
+  // on another page, like Memory on my Home page: one number to glance
+  // at, and a press for the rest. The key's settings say which deck the
+  // page opens on, so a key on my XL can bring it up on my +. A plugin
+  // can only open pages it ships with, which is why it's always this
+  // page and never one I pick.
+  async onKeyDown(ev) {
+    const where = whereToOpen(ev.payload.settings?.openOn, ev.action.device, [...streamDeck.devices]);
+    if (!where) return ev.action.showAlert();
+    try {
+      await streamDeck.profiles.switchToProfile(where.deck, where.profile);
+    } catch (err) {
+      streamDeck.logger.error(`Couldn't open the Mac Vitals page: ${err.message}`);
+      await ev.action.showAlert();
+    }
+  }
+
+  // The settings page asks two things when it opens: "explain" for its
+  // words, and "getDecks" for the rows of its "Open on" menu.
   onSendToPlugin(ev) {
+    if (ev.payload?.event === "getDecks") {
+      streamDeck.ui.sendToPropertyInspector({ event: "getDecks", items: deckChoices([...streamDeck.devices]) }).catch(() => {});
+    }
     if (ev.payload?.event !== "explain") return;
     explaining = this;
     this.sendWords();
