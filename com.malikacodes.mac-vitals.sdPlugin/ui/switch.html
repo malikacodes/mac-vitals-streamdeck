@@ -5,8 +5,25 @@
     <!-- Elgato's settings components. Each one saves into this key's
          settings under the name in "setting". -->
     <script src="sdpi-components.js"></script>
+    <!-- The rows of sentences need a little room, and the top padding
+         lines their first line up with the row's label. -->
+    <style>
+      .words {
+        padding: 7px 0 6px;
+        line-height: 1.45;
+        color: var(--input-font-color);
+        font-size: var(--font-size);
+      }
+      .words ul {
+        margin: 0;
+        padding-left: 16px;
+      }
+    </style>
   </head>
   <body>
+    <sdpi-item label="This is">
+      <div class="words">The Wi-Fi switch. It shows which network the Mac is on, and a press moves to the next one in the list below.</div>
+    </sdpi-item>
     <!-- This box saves after every letter, so the plugin sees half-typed
          names on the way. That's fine here: the list is only used to
          draw the key and on a press, and nothing is saved per name. -->
@@ -15,6 +32,25 @@
     </sdpi-item>
     <sdpi-item label="Short names">
       <span>For a long name, add what the key should say: <code>My Very Long Network Name = Home</code></span>
+    </sdpi-item>
+    <sdpi-item label="Reading it">
+      <div class="words">
+        <ul>
+          <li>Lit symbol and a lit dot: the Mac is on that network</li>
+          <li>Name with a gray symbol: on its way there, give it a few seconds</li>
+          <li>Other Wi-Fi: on a network that isn't in my list</li>
+          <li>No Wi-Fi or Wi-Fi off: not connected to anything</li>
+        </ul>
+      </div>
+    </sdpi-item>
+    <sdpi-item label="If it's off">
+      <div class="words">
+        <ul>
+          <li>No password: that network's password isn't saved for this key yet. It's saved once from Terminal, the README has the command</li>
+          <li>Can't join: the saved password is wrong, or the network is out of range</li>
+          <li>The menu bar can lag a few seconds behind after a press. The key is the one to trust</li>
+        </ul>
+      </div>
     </sdpi-item>
   </body>
 </html>

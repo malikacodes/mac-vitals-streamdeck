@@ -3,6 +3,7 @@
 // vitals.js and the drawing is in draw.js.
 import streamDeck, { action, SingletonAction } from "@elgato/streamdeck";
 import { drawKey, drawStat, HISTORY } from "./draw.js";
+import { explain } from "./explain.js";
 import { readVitals, STATS, words } from "./vitals.js";
 import { join, nextNetwork, parseNetworks, readWifi, whichNetwork } from "./wifi.js";
 
@@ -132,6 +133,9 @@ class SwitchKey extends SingletonAction {
 const history = Object.fromEntries(Object.keys(STATS).map((stat) => [stat, []]));
 const statKeys = new Set();
 let reading = null;
+// The stat key whose settings page is open, if one is. Stream Deck
+// shows one settings page at a time.
+let explaining = null;
 
 async function takeReading() {
   const vitals = await readVitals();
@@ -140,6 +144,8 @@ async function takeReading() {
     if (history[stat].length > HISTORY) history[stat].shift();
   }
   await Promise.all([...statKeys].map((key) => key.render()));
+  // Keeps "Right now" on the open settings page in step with the key.
+  explaining?.sendWords();
 }
 
 // One of these per stat. They're the same key showing a different
@@ -171,6 +177,24 @@ class StatKey extends SingletonAction {
       clearInterval(reading);
       reading = null;
     }
+  }
+
+  // The settings page asks for its words when it opens.
+  onSendToPlugin(ev) {
+    if (ev.payload?.event !== "explain") return;
+    explaining = this;
+    this.sendWords();
+  }
+
+  onPropertyInspectorDidDisappear() {
+    if (explaining === this) explaining = null;
+  }
+
+  sendWords() {
+    const words = explain(this.stat, history[this.stat], STATS[this.stat].top);
+    // The page can close between the reading and the send. Then
+    // there's nobody to tell, and that's fine.
+    streamDeck.ui.sendToPropertyInspector({ event: "explain", ...words }).catch(() => {});
   }
 
   async render() {

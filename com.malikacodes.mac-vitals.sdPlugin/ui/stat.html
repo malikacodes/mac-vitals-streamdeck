@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!-- Elgato's settings components. This page has nothing to set: it
+         only uses them for the rows, so it looks like every other
+         settings page. -->
+    <script src="sdpi-components.js"></script>
+    <!-- The rows here hold sentences, not text boxes, so they need a
+         little room. The top padding lines the first line of words up
+         with the row's label. -->
+    <style>
+      .words {
+        padding: 7px 0 6px;
+        line-height: 1.45;
+        color: var(--input-font-color);
+        font-size: var(--font-size);
+      }
+      .words ul {
+        margin: 0;
+        padding-left: 16px;
+      }
+      #verdict {
+        font-weight: 600;
+      }
+      #verdict.good { color: #7fd6a0; }
+      #verdict.watch { color: #f2c66d; }
+      #verdict.bad { color: #f28b82; }
+    </style>
+  </head>
+  <body>
+    <!-- All of it is filled in by stat.js with words from the plugin, so
+         "Right now" keeps up with the key while this page is open. -->
+    <sdpi-item label="This is">
+      <div class="words" id="what">...</div>
+    </sdpi-item>
+    <sdpi-item label="Right now">
+      <div class="words"><span id="now"></span> <span id="verdict"></span><br /><span id="means"></span></div>
+    </sdpi-item>
+    <sdpi-item label="Normal">
+      <div class="words"><ul id="normal"></ul></div>
+    </sdpi-item>
+    <sdpi-item label="If it's off">
+      <div class="words" id="todo"></div>
+    </sdpi-item>
+
+    <script src="stat.js"></script>
+  </body>
+</html>
