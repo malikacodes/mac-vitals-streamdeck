@@ -114,5 +114,21 @@
         }
       ]
     }
+  ],
+  "Profiles": [
+    {
+      "Name": "profiles/mac-vitals-xl",
+      "DeviceType": 2,
+      "Readonly": false,
+      "DontAutoSwitchWhenInstalled": true,
+      "AutoInstall": true
+    },
+    {
+      "Name": "profiles/mac-vitals-plus",
+      "DeviceType": 7,
+      "Readonly": false,
+      "DontAutoSwitchWhenInstalled": true,
+      "AutoInstall": true
+    }
   ]
 }
