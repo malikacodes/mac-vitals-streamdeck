@@ -174,11 +174,7 @@ class StatKey extends SingletonAction {
     this.stat = stat;
   }
 
-  // The ids of this stat's keys that are on screen right now.
-  shown = new Set();
-
   async onWillAppear(ev) {
-    this.shown.add(ev.action.id);
     statKeys.add(this);
     await this.render();
     // One reading at a time. If the Mac is slow to answer, the next
@@ -188,8 +184,9 @@ class StatKey extends SingletonAction {
   }
 
   onWillDisappear(ev) {
-    this.shown.delete(ev.action.id);
-    if (this.shown.size === 0) statKeys.delete(this);
+    // The SDK has already taken this key out of the list by now, so an
+    // empty list means this stat has no keys on screen.
+    if (this.actions.length === 0) statKeys.delete(this);
     // No stat keys on screen, nothing to keep reading.
     if (statKeys.size === 0) {
       clearInterval(reading);
