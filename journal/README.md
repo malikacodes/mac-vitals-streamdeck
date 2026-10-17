@@ -12,3 +12,4 @@ can redo it without rediscovering every wall.
 | 04 | 2026-10-17 | [One reading at a time](04-one-reading-at-a-time.md) |
 | 05 | 2026-10-17 | [The Wi-Fi key stops crashing](05-the-wifi-key-stops-crashing.md) |
 | 06 | 2026-10-17 | [One rule for every command](06-one-rule-for-every-command.md) |
+| 07 | 2026-10-17 | [A locked keychain is not "no password"](07-a-locked-keychain-is-not-no-password.md) |
