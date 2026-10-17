@@ -10,3 +10,4 @@ can redo it without rediscovering every wall.
 | 02 | 2026-10-13 | [Keys that explain themselves](02-keys-that-explain-themselves.md) |
 | 03 | 2026-10-13 | [Memory on my Home page](03-memory-on-my-home-page.md) |
 | 04 | 2026-10-17 | [One reading at a time](04-one-reading-at-a-time.md) |
+| 05 | 2026-10-17 | [The Wi-Fi key stops crashing](05-the-wifi-key-stops-crashing.md) |
