@@ -7,7 +7,7 @@ import { explain } from "./explain.js";
 import { deckChoices, whereToOpen } from "./pages.js";
 import { poll } from "./poll.js";
 import { readVitals, STATS, words } from "./vitals.js";
-import { join, nextNetwork, parseNetworks, readWifi, whichNetwork } from "./wifi.js";
+import { join, nextNetwork, parseNetworks, readWifi, settle, whichNetwork } from "./wifi.js";
 
 // Keep this at "info". The "trace" level writes every message between the
 // plugin and Stream Deck into the log file, and that includes the global
@@ -19,9 +19,6 @@ const NOTICE_MS = 2000;
 // How often the key looks at the Wi-Fi by itself, so it keeps up when I
 // change network from the menu bar or walk out of range.
 const LOOK_MS = 5000;
-// After a join, the Mac takes a moment to admit which network it's on.
-const SETTLE_TRIES = 12;
-const SETTLE_MS = 500;
 // How often the stat keys take a reading. Two seconds is quick enough
 // to feel live and slow enough that the looking doesn't show up in the
 // CPU number it's measuring.
@@ -32,8 +29,6 @@ const VITALS_MS = 2000;
 function asImage(svg) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
-
-const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 
 class SwitchKey extends SingletonAction {
   // Each key's list of networks, by the key's id.
@@ -106,11 +101,7 @@ class SwitchKey extends SingletonAction {
       await join(next.name);
       // Wait for the Mac to say it's on the new network before the key
       // lights up, so the key never claims a network too early.
-      for (let i = 0; i < SETTLE_TRIES; i++) {
-        now = await readWifi();
-        if (whichNetwork(now.record, networks) === next.name) break;
-        await wait(SETTLE_MS);
-      }
+      now = (await settle(readWifi, networks, next.name)).wifi ?? now;
       this.joining = null;
     } catch (err) {
       streamDeck.logger.error(`Couldn't switch Wi-Fi: ${err.message}`);

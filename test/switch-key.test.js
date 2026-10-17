@@ -167,3 +167,30 @@ test("a key that comes back doesn't get a reading from before it left", async (t
   await appear(deck.keys[1]);
   assert.equal(deck.keys[1].pictures.length, drawn);
 });
+
+// Moves the clock through the settle loop's half-second waits until
+// the press has finished.
+async function pressThrough(t, key) {
+  let done = false;
+  const pressed = switchKey.onKeyDown({ action: key }).then(() => (done = true));
+  for (let i = 0; i < 20 && !done; i++) {
+    await settle();
+    t.mock.timers.tick(500);
+  }
+  await pressed;
+}
+
+// The join worked; it's only my looking afterwards that failed. Saying
+// "Can't join" would be untrue, and the old code said it.
+test("a read that fails after a good join is not a failed join", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.read = async () => {
+    if (mac.reads > 1) throw new Error("scutil hung");
+    return onNetwork("Upstairs");
+  };
+  mac.reads = 0;
+  await pressThrough(t, deck.keys[0]);
+  assert.equal(switchKey.notice, null);
+});

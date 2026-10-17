@@ -98,6 +98,31 @@ export async function readWifi({ run = runCommand } = {}) {
   return { power, connected, record: connected ? record : null };
 }
 
+// After a join, the Mac takes a moment to admit which network it's on.
+// Looks at the Wi-Fi up to `tries` times, `ms` apart, until it's on
+// `name`. Gives back { landed, wifi }: whether it got there, and the
+// last reading it managed, so the key can be drawn from it.
+//
+// A look that fails counts as one more try and not as the end. The
+// card is between networks right now, so a bad look is to be expected,
+// and the join itself already worked or it would have thrown.
+//
+// `read` is how it looks, so the tests can hand in a Mac that makes up
+// its mind slowly.
+export async function settle(read, networks, name, { tries = 12, ms = 500 } = {}) {
+  let wifi = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      wifi = await read();
+      if (whichNetwork(wifi.record, networks) === name) return { landed: true, wifi };
+    } catch {
+      // Try again after the wait below.
+    }
+    await new Promise((done) => setTimeout(done, ms));
+  }
+  return { landed: false, wifi };
+}
+
 // The name my passwords are filed under in the keychain. It's the
 // plugin's first name, from when it was only this key. Changing it
 // would mean typing every password in again.
