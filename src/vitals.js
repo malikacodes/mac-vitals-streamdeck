@@ -109,6 +109,12 @@ export function words(stat, value) {
 // The last thing I looked at, to compare the next look against.
 let last = null;
 
+// A look older than this isn't compared against. The keys stop looking
+// when none are on screen, so after a while away the last look is
+// minutes old, and the traffic since would show up as one huge speed.
+// A slow tick takes a few seconds at most, so ten is well clear of one.
+const STALE_MS = 10_000;
+
 // The commands that failed last time, so a command that keeps failing
 // is written to the log once, when it starts, and not every two seconds.
 const failing = new Set();
@@ -141,10 +147,11 @@ export async function readVitals({ run = runCommand, log = () => {} } = {}) {
     }
   }
 
-  const seconds = last ? (now.at - last.at) / 1000 : 0;
-  const speed = (way) => (last?.net && now.net ? mbps(last.net[way], now.net[way], seconds) : null);
+  const before = last && now.at - last.at >= 0 && now.at - last.at < STALE_MS ? last : null;
+  const seconds = before ? (now.at - before.at) / 1000 : 0;
+  const speed = (way) => (before?.net && now.net ? mbps(before.net[way], now.net[way], seconds) : null);
   const vitals = {
-    cpu: last ? cpuPercent(last.cores, now.cores) : null,
+    cpu: before ? cpuPercent(before.cores, now.cores) : null,
     memory: vm.status === "fulfilled" ? memoryUsed(vm.value.stdout) : null,
     down: speed("down"),
     up: speed("up"),

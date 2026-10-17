@@ -183,7 +183,7 @@ class StatKey extends SingletonAction {
     reading ??= poll(takeReading, VITALS_MS, (line) => streamDeck.logger.error(`Couldn't take a reading: ${line}`));
   }
 
-  onWillDisappear(ev) {
+  onWillDisappear() {
     // The SDK has already taken this key out of the list by now, so an
     // empty list means this stat has no keys on screen.
     if (this.actions.length === 0) statKeys.delete(this);
