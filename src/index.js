@@ -112,10 +112,8 @@ class SwitchKey extends SingletonAction {
       // what it did see, and the log gets a line, because otherwise
       // it's just a key that didn't change.
       if (!settled.landed) streamDeck.logger.error(`Joined ${next.name}, but the Mac never said it was on it${settled.error ? ` (${settled.error.message})` : ""}`);
-      this.joining = null;
     } catch (err) {
       streamDeck.logger.error(`Couldn't switch Wi-Fi: ${err.message}`);
-      this.joining = null;
       // The two failures need different things from me: one is a
       // Terminal command, the other is being in range.
       this.notice = err.noPassword ? "No password" : "Can't join";
@@ -123,6 +121,8 @@ class SwitchKey extends SingletonAction {
         this.notice = null;
         if (this.wifi) this.render(this.wifi).catch((err) => streamDeck.logger.error(`Couldn't redraw: ${err.message}`));
       }, NOTICE_MS);
+    } finally {
+      this.joining = null;
     }
     await this.render(now);
   }
@@ -227,10 +227,10 @@ class StatKey extends SingletonAction {
   }
 
   sendWords() {
-    const words = explain(this.stat, history[this.stat], STATS[this.stat].top);
+    const text = explain(this.stat, history[this.stat], STATS[this.stat].top);
     // The page can close between the reading and the send. Then
     // there's nobody to tell, and that's fine.
-    streamDeck.ui.sendToPropertyInspector({ event: "explain", ...words }).catch(() => {});
+    streamDeck.ui.sendToPropertyInspector({ event: "explain", ...text }).catch(() => {});
   }
 
   async render() {
