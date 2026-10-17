@@ -112,9 +112,14 @@ async function savedPassword(name, run) {
   try {
     const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", KEYCHAIN, "-a", name, "-w"], { timeout: COMMAND_MS });
     return stdout.replace(/\n$/, "") || null;
-  } catch {
-    // `security` exits with an error when there's nothing under that name.
-    return null;
+  } catch (err) {
+    // Exit 44 is `security` saying there's nothing under that name.
+    // Anything else (a locked keychain, a command that hung) means I
+    // don't know, and guessing "no password" would send me to Terminal
+    // to save one I already saved. Node's own message is left out of
+    // the new error because it repeats the command.
+    if (err.code === 44) return null;
+    throw new Error(`Couldn't get the saved password for ${name} from the keychain`);
   }
 }
 
