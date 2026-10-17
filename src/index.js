@@ -101,7 +101,12 @@ class SwitchKey extends SingletonAction {
       await join(next.name);
       // Wait for the Mac to say it's on the new network before the key
       // lights up, so the key never claims a network too early.
-      now = (await settle(readWifi, networks, next.name)).wifi ?? now;
+      const settled = await settle(readWifi, networks, next.name);
+      now = settled.wifi ?? now;
+      // The join went through but the Mac never said so. The key shows
+      // what it did see, and the log gets a line, because otherwise
+      // it's just a key that didn't change.
+      if (!settled.landed) streamDeck.logger.error(`Joined ${next.name}, but the Mac never said it was on it`);
       this.joining = null;
     } catch (err) {
       streamDeck.logger.error(`Couldn't switch Wi-Fi: ${err.message}`);

@@ -194,3 +194,16 @@ test("a read that fails after a good join is not a failed join", async (t) => {
   await pressThrough(t, deck.keys[0]);
   assert.equal(switchKey.notice, null);
 });
+
+// Twelve looks and the Mac still says the old network. The key goes
+// back to showing the truth, and the log hears about it. It used to
+// give up without a word.
+test("giving up on the settle is logged", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  deck.errors.length = 0;
+  await pressThrough(t, deck.keys[0]);
+  assert.equal(deck.errors.length, 1);
+  assert.match(deck.errors[0], /Downstairs/);
+});
