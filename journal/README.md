@@ -13,3 +13,4 @@ can redo it without rediscovering every wall.
 | 05 | 2026-10-17 | [The Wi-Fi key stops crashing](05-the-wifi-key-stops-crashing.md) |
 | 06 | 2026-10-17 | [One rule for every command](06-one-rule-for-every-command.md) |
 | 07 | 2026-10-17 | [A locked keychain is not "no password"](07-a-locked-keychain-is-not-no-password.md) |
+| 08 | 2026-10-17 | [Waiting for a join to land](08-waiting-for-a-join-to-land.md) |
