@@ -1,10 +1,7 @@
 // Everything about the Mac's Wi-Fi: which network it's on, and joining
 // another one. The top half is plain functions the tests can run. The
 // bottom half runs the Mac's own command line tools.
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const run = promisify(execFile);
+import { COMMAND_MS, run as runCommand } from "./run.js";
 
 // Turns the settings box into a list. One network per line. A line can
 // also be "network name = what the key says", for a name too long to
@@ -72,9 +69,9 @@ export function whichNetwork(record, networks) {
 // The Wi-Fi card's device name. It's en0 on my Mac, but that's not a
 // promise, so I ask once and keep the answer.
 let device;
-async function wifiDevice() {
+async function wifiDevice(run) {
   if (device) return device;
-  const { stdout } = await run("/usr/sbin/networksetup", ["-listallhardwareports"]);
+  const { stdout } = await run("/usr/sbin/networksetup", ["-listallhardwareports"], { timeout: COMMAND_MS });
   const found = stdout.match(/Hardware Port: Wi-Fi\nDevice: (\S+)/);
   if (!found) throw new Error("This Mac has no Wi-Fi card");
   device = found[1];
@@ -85,13 +82,15 @@ async function wifiDevice() {
 //   power      is it switched on
 //   connected  is it on a network at all
 //   record     the scan record, for whichNetwork()
-export async function readWifi() {
-  const dev = await wifiDevice();
+//
+// `run` is how the commands get run. The tests hand in a fake one.
+export async function readWifi({ run = runCommand } = {}) {
+  const dev = await wifiDevice(run);
   // scutil doesn't take its question on the command line. It waits for
   // me to type it, so I start it and then send the line in.
-  const asking = run("/usr/sbin/scutil", []);
+  const asking = run("/usr/sbin/scutil", [], { timeout: COMMAND_MS });
   asking.child.stdin.end(`show State:/Network/Interface/${dev}/AirPort\n`);
-  const [airport, link] = await Promise.all([asking, run("/sbin/ifconfig", [dev])]);
+  const [airport, link] = await Promise.all([asking, run("/sbin/ifconfig", [dev], { timeout: COMMAND_MS })]);
   const { power, record } = parseAirport(airport.stdout);
   // The scan record can outlive the connection, so "connected" comes
   // from the card itself and not from the record being there.
@@ -109,9 +108,9 @@ const KEYCHAIN = "wifi-toggle";
 // is in the System keychain and asks for my Mac password each time, so
 // the key gets a copy of its own. They're saved from Terminal with
 // `security add-generic-password`, never typed into Stream Deck.
-async function savedPassword(name) {
+async function savedPassword(name, run) {
   try {
-    const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", KEYCHAIN, "-a", name, "-w"]);
+    const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", KEYCHAIN, "-a", name, "-w"], { timeout: COMMAND_MS });
     return stdout.replace(/\n$/, "") || null;
   } catch {
     // `security` exits with an error when there's nothing under that name.
@@ -125,9 +124,9 @@ async function savedPassword(name) {
 // networksetup says nothing when it works. When it doesn't, it prints
 // the reason and still exits as if all was well, so any words at all
 // count as a failure.
-export async function join(name) {
-  const dev = await wifiDevice();
-  const password = await savedPassword(name);
+export async function join(name, { run = runCommand } = {}) {
+  const dev = await wifiDevice(run);
+  const password = await savedPassword(name, run);
   const args = ["-setairportnetwork", dev, name];
   if (password) args.push(password);
 
