@@ -145,7 +145,9 @@ export async function join(name, { run = runCommand } = {}) {
     throw new Error(`networksetup gave up joining ${name}`);
   }
   if (said) {
-    const failed = new Error(said);
+    // The reason goes in the log, so if it quotes the password back
+    // it's blanked out first.
+    const failed = new Error(password ? said.replaceAll(password, "…") : said);
     failed.noPassword = !password;
     throw failed;
   }

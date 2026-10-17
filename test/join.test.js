@@ -58,3 +58,19 @@ test("a locked keychain is not read as no password, and nothing is joined", asyn
   await assert.rejects(join("Upstairs", { run }), (err) => err.noPassword !== true && !err.message.includes(SECRET));
   assert.equal(joining(run), undefined, "no attempt to join without the password");
 });
+
+// The thrown text ends up in the log file. Neither failure path may
+// carry the password in it: not Node's "Command failed" text, which
+// repeats the command, and not a reason that echoes it back.
+test("the password is never in the thrown text", async () => {
+  const echoed = Object.assign(new Error(`Command failed: networksetup -setairportnetwork en0 Upstairs ${SECRET}`), { stdout: SECRET });
+  await assert.rejects(join("Upstairs", { run: fakeRun({ security: SECRET, fails: echoed }) }), (err) => !err.message.includes(SECRET));
+  await assert.rejects(join("Upstairs", { run: fakeRun({ security: SECRET, said: `Could not join with ${SECRET}` }) }), (err) => !err.message.includes(SECRET));
+});
+
+// A keychain lookup that hung is killed by its time limit, which Node
+// reports with no exit code at all. That's "I don't know", the same as locked.
+test("a keychain lookup that timed out is not read as no password", async () => {
+  const hung = Object.assign(new Error("Command failed"), { code: null, killed: true });
+  await assert.rejects(join("Upstairs", { run: fakeRun({ security: hung }) }), (err) => err.noPassword !== true);
+});
