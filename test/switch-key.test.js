@@ -154,3 +154,16 @@ test("the notice clears with the Wi-Fi unreadable, and shows the last known pict
   const expected = drawKey({ networks, wifi: { ...onNetwork("Upstairs"), name: "Upstairs" }, joining: null, notice: null });
   assert.equal(after, `data:image/svg+xml;base64,${Buffer.from(expected).toString("base64")}`);
 });
+
+// Once every key has gone, the last reading is out of date. A key that
+// comes back must not be drawn from it while the new look is still on its way.
+test("a key that comes back doesn't get a reading from before it left", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  switchKey.onWillDisappear({ action: deck.keys[0] });
+  mac.read = () => new Promise(() => {});
+  const drawn = deck.keys[1].pictures.length;
+  await appear(deck.keys[1]);
+  assert.equal(deck.keys[1].pictures.length, drawn);
+});

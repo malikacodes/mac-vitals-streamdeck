@@ -64,6 +64,8 @@ class SwitchKey extends SingletonAction {
     if (this.lists.size === 0) {
       clearInterval(this.looking);
       this.looking = null;
+      // An old reading would be drawn as current when a key comes back.
+      this.wifi = null;
     }
   }
 
@@ -118,7 +120,7 @@ class SwitchKey extends SingletonAction {
       this.notice = err.noPassword ? "No password" : "Can't join";
       setTimeout(() => {
         this.notice = null;
-        if (this.wifi) this.render(this.wifi);
+        if (this.wifi) this.render(this.wifi).catch((err) => streamDeck.logger.error(`Couldn't redraw: ${err.message}`));
       }, NOTICE_MS);
     }
     // If even the first look failed there's no fresh reading, and the
