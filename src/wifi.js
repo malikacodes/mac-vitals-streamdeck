@@ -100,8 +100,9 @@ export async function readWifi({ run = runCommand } = {}) {
 
 // After a join, the Mac takes a moment to admit which network it's on.
 // Looks at the Wi-Fi up to `tries` times, `ms` apart, until it's on
-// `name`. Gives back { landed, wifi }: whether it got there, and the
-// last reading it managed, so the key can be drawn from it.
+// `name`. Gives back { landed, wifi, error }: whether it got there, the
+// last reading it managed so the key can be drawn from it, and the
+// last failure if the final look failed.
 //
 // A look that fails counts as one more try and not as the end. The
 // card is between networks right now, so a bad look is to be expected,
@@ -111,16 +112,20 @@ export async function readWifi({ run = runCommand } = {}) {
 // its mind slowly.
 export async function settle(read, networks, name, { tries = 12, ms = 500 } = {}) {
   let wifi = null;
+  let error = null;
   for (let i = 0; i < tries; i++) {
+    let seen = null;
     try {
-      wifi = await read();
-      if (whichNetwork(wifi.record, networks) === name) return { landed: true, wifi };
-    } catch {
-      // Try again after the wait below.
+      seen = await read();
+      wifi = seen;
+      error = null;
+    } catch (err) {
+      error = err;
     }
+    if (seen && whichNetwork(seen.record, networks) === name) return { landed: true, wifi, error };
     await new Promise((done) => setTimeout(done, ms));
   }
-  return { landed: false, wifi };
+  return { landed: false, wifi, error };
 }
 
 // The name my passwords are filed under in the keychain. It's the

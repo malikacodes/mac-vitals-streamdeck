@@ -53,4 +53,5 @@ test("reads that always fail give no reading and no landing", async () => {
   const result = await settle(reader([new Error("scutil hung")]), networks, "Downstairs", quick);
   assert.equal(result.landed, false);
   assert.equal(result.wifi, null);
+  assert.equal(result.error.message, "scutil hung", "the last failure is handed back for the log");
 });

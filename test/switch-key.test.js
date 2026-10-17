@@ -193,6 +193,7 @@ test("a read that fails after a good join is not a failed join", async (t) => {
   mac.reads = 0;
   await pressThrough(t, deck.keys[0]);
   assert.equal(switchKey.notice, null);
+  assert.match(deck.errors.at(-1), /never said/);
 });
 
 // Twelve looks and the Mac still says the old network. The key goes
@@ -206,4 +207,22 @@ test("giving up on the settle is logged", async (t) => {
   await pressThrough(t, deck.keys[0]);
   assert.equal(deck.errors.length, 1);
   assert.match(deck.errors[0], /Downstairs/);
+  assert.ok(deck.keys[0].pictures.length > 1, "the key was drawn again from what the Mac did say");
+});
+
+// If the look before the join fails, no join was tried. "Can't join"
+// would blame the network, so the key just flashes its alert.
+test("a press whose first look fails shows the alert, not a join notice", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.read = async () => {
+    throw new Error("scutil hung");
+  };
+  let joinTried = false;
+  mac.join = async () => (joinTried = true);
+  await pressThrough(t, deck.keys[0]);
+  assert.equal(switchKey.notice, null);
+  assert.equal(deck.keys[0].alerts, 1);
+  assert.equal(joinTried, false);
 });

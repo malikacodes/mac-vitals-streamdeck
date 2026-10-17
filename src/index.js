@@ -93,11 +93,16 @@ class SwitchKey extends SingletonAction {
     // and nothing has to look again.
     let now;
     try {
-      const wifi = await readWifi();
-      now = wifi;
-      const next = nextNetwork(networks, whichNetwork(wifi.record, networks));
+      now = await readWifi();
+    } catch (err) {
+      // No join was tried, so this isn't "Can't join".
+      streamDeck.logger.error(`Couldn't read the Wi-Fi before switching: ${err.message}`);
+      return key.showAlert();
+    }
+    try {
+      const next = nextNetwork(networks, whichNetwork(now.record, networks));
       this.joining = next.name;
-      await this.render(wifi);
+      await this.render(now);
       await join(next.name);
       // Wait for the Mac to say it's on the new network before the key
       // lights up, so the key never claims a network too early.
@@ -106,7 +111,7 @@ class SwitchKey extends SingletonAction {
       // The join went through but the Mac never said so. The key shows
       // what it did see, and the log gets a line, because otherwise
       // it's just a key that didn't change.
-      if (!settled.landed) streamDeck.logger.error(`Joined ${next.name}, but the Mac never said it was on it`);
+      if (!settled.landed) streamDeck.logger.error(`Joined ${next.name}, but the Mac never said it was on it${settled.error ? ` (${settled.error.message})` : ""}`);
       this.joining = null;
     } catch (err) {
       streamDeck.logger.error(`Couldn't switch Wi-Fi: ${err.message}`);
@@ -119,10 +124,7 @@ class SwitchKey extends SingletonAction {
         if (this.wifi) this.render(this.wifi).catch((err) => streamDeck.logger.error(`Couldn't redraw: ${err.message}`));
       }, NOTICE_MS);
     }
-    // If even the first look failed there's no fresh reading, and the
-    // notice is drawn over the last good one.
-    const shown = now ?? this.wifi;
-    if (shown) await this.render(shown);
+    await this.render(now);
   }
 
   // Redraws every key. Handed a reading, it draws from that. Without
