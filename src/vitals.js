@@ -2,12 +2,8 @@
 // memory is in use, how fast data is moving, and how long the internet
 // takes to answer. The top half is plain functions the tests can run.
 // The bottom half asks the Mac.
-import { execFile } from "node:child_process";
 import os from "node:os";
-import { promisify } from "node:util";
-
-// Runs one of the Mac's commands and gives back what it printed.
-const runCommand = promisify(execFile);
+import { COMMAND_MS, run as runCommand } from "./run.js";
 
 // The stats, in the order they sit on my deck. `top` is the top of the
 // graph. The ones without it grow to fit whatever the last minute held,
@@ -116,12 +112,6 @@ let last = null;
 // The commands that failed last time, so a command that keeps failing
 // is written to the log once, when it starts, and not every two seconds.
 const failing = new Set();
-
-// How long a command gets before it's given up on. While the Wi-Fi is
-// changing networks, netstat can sit there for ages, and a reading
-// that never comes back is worse than a dash. Three seconds leaves
-// room for ping's own two second limit.
-const COMMAND_MS = 3000;
 
 // One look at everything. Returns { cpu, memory, down, up, ping }, with
 // null for anything that couldn't be read this time. The first look has
