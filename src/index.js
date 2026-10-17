@@ -124,7 +124,10 @@ class SwitchKey extends SingletonAction {
     for (const key of this.actions) {
       const networks = this.lists.get(key.id) ?? [];
       const name = whichNetwork(wifi.record, networks);
-      await key.setImage(asImage(drawKey({ networks, wifi: { ...wifi, name }, joining: this.joining, notice: this.notice })));
+      const picture = asImage(drawKey({ networks, wifi: { ...wifi, name }, joining: this.joining, notice: this.notice }));
+      // A key can vanish mid-draw (I flip to another page). That key
+      // is lost, but the keys after it still get theirs.
+      await key.setImage(picture).catch((err) => streamDeck.logger.error(`Couldn't draw a key: ${err.message}`));
     }
   }
 }
