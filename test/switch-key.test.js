@@ -95,3 +95,62 @@ test("a key that is gone mid-draw doesn't stop the others", async (t) => {
   await settle();
   assert.ok(deck.keys[1].pictures.length > 0, "the second key still got its picture");
 });
+
+// A read that fails is not the same as Wi-Fi being off. The key keeps
+// the last picture it had, and the log hears about it once.
+test("a failed read keeps the last picture and logs once", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  const before = [...deck.keys[0].pictures];
+  assert.ok(before.length > 0);
+
+  mac.read = async () => {
+    throw new Error("scutil hung");
+  };
+  for (let i = 0; i < 3; i++) {
+    t.mock.timers.tick(5000);
+    await settle();
+  }
+  assert.deepEqual(deck.keys[0].pictures, before, "nothing new was drawn, least of all 'Wi-Fi off'");
+  assert.equal(deck.errors.length, 1);
+});
+
+// A press looks at the Wi-Fi to know where it is, and once more to see
+// the join land. Redrawing in between uses what it already knows.
+test("a press that joins on the first try reads the Wi-Fi twice", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.reads = 0;
+  // Starts on Upstairs, and is on Downstairs after the join.
+  let joined = false;
+  mac.join = async () => (joined = true);
+  mac.read = async () => onNetwork(joined ? "Downstairs" : "Upstairs");
+  await switchKey.onKeyDown({ action: deck.keys[0] });
+  assert.equal(mac.reads, 2);
+});
+
+// A join that fails shows its notice, and two seconds later the notice
+// goes. That redraw must not need a fresh read to work.
+test("the notice clears with the Wi-Fi unreadable, and shows the last known picture", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.join = async () => {
+    throw new Error("Could not find network");
+  };
+  await switchKey.onKeyDown({ action: deck.keys[0] });
+  const withNotice = deck.keys[0].pictures.at(-1);
+
+  mac.read = async () => {
+    throw new Error("scutil hung");
+  };
+  t.mock.timers.tick(2000);
+  await settle();
+  const after = deck.keys[0].pictures.at(-1);
+  assert.notEqual(after, withNotice, "the notice is gone");
+  const networks = realWifi.parseNetworks("Upstairs\nDownstairs");
+  const expected = drawKey({ networks, wifi: { ...onNetwork("Upstairs"), name: "Upstairs" }, joining: null, notice: null });
+  assert.equal(after, `data:image/svg+xml;base64,${Buffer.from(expected).toString("base64")}`);
+});

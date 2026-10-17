@@ -43,11 +43,19 @@ class SwitchKey extends SingletonAction {
   joining = null;
   notice = null;
   looking = null;
+  // The last reading that worked. A redraw that has no new reason to
+  // look (a notice clearing, a list changing) draws from this.
+  wifi = null;
 
   async onWillAppear(ev) {
     this.lists.set(ev.action.id, parseNetworks(ev.payload.settings?.networks));
-    await this.render();
-    this.looking ??= setInterval(() => this.render(), LOOK_MS);
+    // The timer takes its first look right away, and it's one look at
+    // a time, so a slow or failing read is logged once and the keys
+    // keep the picture they had.
+    this.looking ??= poll(() => this.render(), LOOK_MS, (line) => streamDeck.logger.error(`Couldn't read the Wi-Fi: ${line}`));
+    // A key that appears while the timer is already going draws now
+    // from the last reading, instead of waiting for the next tick.
+    if (this.wifi) await this.render(this.wifi);
   }
 
   onWillDisappear(ev) {
@@ -62,7 +70,7 @@ class SwitchKey extends SingletonAction {
   // Runs when I change the list on the settings page.
   async onDidReceiveSettings(ev) {
     this.lists.set(ev.action.id, parseNetworks(ev.payload.settings?.networks));
-    await this.render();
+    if (this.wifi) await this.render(this.wifi);
   }
 
   async onKeyDown(ev) {
@@ -84,16 +92,20 @@ class SwitchKey extends SingletonAction {
     const networks = this.lists.get(key.id) ?? [];
     if (networks.length === 0) return key.showAlert();
 
+    // The newest reading, so the key is redrawn from one that's fresh
+    // and nothing has to look again.
+    let now;
     try {
       const wifi = await readWifi();
+      now = wifi;
       const next = nextNetwork(networks, whichNetwork(wifi.record, networks));
       this.joining = next.name;
-      await this.render();
+      await this.render(wifi);
       await join(next.name);
       // Wait for the Mac to say it's on the new network before the key
       // lights up, so the key never claims a network too early.
       for (let i = 0; i < SETTLE_TRIES; i++) {
-        const now = await readWifi();
+        now = await readWifi();
         if (whichNetwork(now.record, networks) === next.name) break;
         await wait(SETTLE_MS);
       }
@@ -106,21 +118,22 @@ class SwitchKey extends SingletonAction {
       this.notice = err.noPassword ? "No password" : "Can't join";
       setTimeout(() => {
         this.notice = null;
-        this.render();
+        if (this.wifi) this.render(this.wifi);
       }, NOTICE_MS);
     }
-    await this.render();
+    // If even the first look failed there's no fresh reading, and the
+    // notice is drawn over the last good one.
+    const shown = now ?? this.wifi;
+    if (shown) await this.render(shown);
   }
 
-  // Looks at the Wi-Fi once and redraws every key from it.
-  async render() {
-    let wifi;
-    try {
-      wifi = await readWifi();
-    } catch (err) {
-      streamDeck.logger.error(`Couldn't read the Wi-Fi: ${err.message}`);
-      wifi = { power: false, connected: false, record: null };
-    }
+  // Redraws every key. Handed a reading, it draws from that. Without
+  // one it looks at the Wi-Fi itself, and if the look fails it throws
+  // and draws nothing: a read that failed is not "Wi-Fi off", so the
+  // keys keep the last picture they had.
+  async render(wifi) {
+    wifi ??= await readWifi();
+    this.wifi = wifi;
     for (const key of this.actions) {
       const networks = this.lists.get(key.id) ?? [];
       const name = whichNetwork(wifi.record, networks);
