@@ -6,7 +6,8 @@ import { execFile } from "node:child_process";
 import os from "node:os";
 import { promisify } from "node:util";
 
-const run = promisify(execFile);
+// Runs one of the Mac's commands and gives back what it printed.
+const runCommand = promisify(execFile);
 
 // The stats, in the order they sit on my deck. `top` is the top of the
 // graph. The ones without it grow to fit whatever the last minute held,
@@ -112,18 +113,43 @@ export function words(stat, value) {
 // The last thing I looked at, to compare the next look against.
 let last = null;
 
+// The commands that failed last time, so a command that keeps failing
+// is written to the log once, when it starts, and not every two seconds.
+const failing = new Set();
+
+// How long a command gets before it's given up on. While the Wi-Fi is
+// changing networks, netstat can sit there for ages, and a reading
+// that never comes back is worse than a dash. Three seconds leaves
+// room for ping's own two second limit.
+const COMMAND_MS = 3000;
+
 // One look at everything. Returns { cpu, memory, down, up, ping }, with
 // null for anything that couldn't be read this time. The first look has
 // nothing to compare against, so cpu and the speeds start as null.
-export async function readVitals() {
+//
+// `run` is how the commands get run. The tests hand in a fake one that
+// prints saved output, so they can try a dead network without one.
+// `log` is where a command that stopped answering gets written down.
+export async function readVitals({ run = runCommand, log = () => {} } = {}) {
   const now = { at: Date.now(), cores: os.cpus(), net: null };
   const [vm, net, ping] = await Promise.allSettled([
-    run("/usr/bin/vm_stat"),
-    run("/usr/sbin/netstat", ["-ib"]),
+    run("/usr/bin/vm_stat", [], { timeout: COMMAND_MS }),
+    run("/usr/sbin/netstat", ["-ib"], { timeout: COMMAND_MS }),
     // One small packet to Cloudflare's 1.1.1.1, giving up after 2 seconds.
-    run("/sbin/ping", ["-c", "1", "-t", "2", "1.1.1.1"]),
+    run("/sbin/ping", ["-c", "1", "-t", "2", "1.1.1.1"], { timeout: COMMAND_MS }),
   ]);
   if (net.status === "fulfilled") now.net = netBytes(net.value.stdout);
+
+  // ping fails whenever the internet is out, which is a reading and not
+  // a problem, so only the other two are worth a line in the log.
+  for (const [name, result] of [["vm_stat", vm], ["netstat", net]]) {
+    if (result.status === "rejected" && !failing.has(name)) {
+      failing.add(name);
+      log(`${name} stopped answering: ${result.reason.message}`);
+    } else if (result.status === "fulfilled" && failing.delete(name)) {
+      log(`${name} is answering again`);
+    }
+  }
 
   const seconds = last ? (now.at - last.at) / 1000 : 0;
   const speed = (way) => (last?.net && now.net ? mbps(last.net[way], now.net[way], seconds) : null);
