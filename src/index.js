@@ -5,6 +5,7 @@ import streamDeck, { action, SingletonAction } from "@elgato/streamdeck";
 import { drawKey, drawStat, HISTORY } from "./draw.js";
 import { explain } from "./explain.js";
 import { deckChoices, whereToOpen } from "./pages.js";
+import { poll } from "./poll.js";
 import { readVitals, STATS, words } from "./vitals.js";
 import { join, nextNetwork, parseNetworks, readWifi, whichNetwork } from "./wifi.js";
 
@@ -139,7 +140,7 @@ let reading = null;
 let explaining = null;
 
 async function takeReading() {
-  const vitals = await readVitals();
+  const vitals = await readVitals({ log: (line) => streamDeck.logger.warn(line) });
   for (const stat of Object.keys(STATS)) {
     history[stat].push(vitals[stat]);
     if (history[stat].length > HISTORY) history[stat].shift();
@@ -164,10 +165,10 @@ class StatKey extends SingletonAction {
     this.shown.add(ev.action.id);
     statKeys.add(this);
     await this.render();
-    if (!reading) {
-      reading = setInterval(takeReading, VITALS_MS);
-      takeReading();
-    }
+    // One reading at a time. If the Mac is slow to answer, the next
+    // tick waits its turn instead of piling on, and a reading that
+    // fails is logged without stopping the timer.
+    reading ??= poll(takeReading, VITALS_MS, (line) => streamDeck.logger.error(`Couldn't take a reading: ${line}`));
   }
 
   onWillDisappear(ev) {
