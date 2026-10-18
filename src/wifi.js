@@ -1,10 +1,7 @@
 // Everything about the Mac's Wi-Fi: which network it's on, and joining
 // another one. The top half is plain functions the tests can run. The
 // bottom half runs the Mac's own command line tools.
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const run = promisify(execFile);
+import { COMMAND_MS, run as runCommand } from "./run.js";
 
 // Turns the settings box into a list. One network per line. A line can
 // also be "network name = what the key says", for a name too long to
@@ -72,9 +69,9 @@ export function whichNetwork(record, networks) {
 // The Wi-Fi card's device name. It's en0 on my Mac, but that's not a
 // promise, so I ask once and keep the answer.
 let device;
-async function wifiDevice() {
+async function wifiDevice(run) {
   if (device) return device;
-  const { stdout } = await run("/usr/sbin/networksetup", ["-listallhardwareports"]);
+  const { stdout } = await run("/usr/sbin/networksetup", ["-listallhardwareports"], { timeout: COMMAND_MS });
   const found = stdout.match(/Hardware Port: Wi-Fi\nDevice: (\S+)/);
   if (!found) throw new Error("This Mac has no Wi-Fi card");
   device = found[1];
@@ -85,18 +82,50 @@ async function wifiDevice() {
 //   power      is it switched on
 //   connected  is it on a network at all
 //   record     the scan record, for whichNetwork()
-export async function readWifi() {
-  const dev = await wifiDevice();
+//
+// `run` is how the commands get run. The tests hand in a fake one.
+export async function readWifi({ run = runCommand } = {}) {
+  const dev = await wifiDevice(run);
   // scutil doesn't take its question on the command line. It waits for
   // me to type it, so I start it and then send the line in.
-  const asking = run("/usr/sbin/scutil", []);
+  const asking = run("/usr/sbin/scutil", [], { timeout: COMMAND_MS });
   asking.child.stdin.end(`show State:/Network/Interface/${dev}/AirPort\n`);
-  const [airport, link] = await Promise.all([asking, run("/sbin/ifconfig", [dev])]);
+  const [airport, link] = await Promise.all([asking, run("/sbin/ifconfig", [dev], { timeout: COMMAND_MS })]);
   const { power, record } = parseAirport(airport.stdout);
   // The scan record can outlive the connection, so "connected" comes
   // from the card itself and not from the record being there.
   const connected = power && /status: active/.test(link.stdout);
   return { power, connected, record: connected ? record : null };
+}
+
+// After a join, the Mac takes a moment to admit which network it's on.
+// Looks at the Wi-Fi up to `tries` times, `ms` apart, until it's on
+// `name`. Gives back { landed, wifi, error }: whether it got there, the
+// last reading it managed so the key can be drawn from it, and the
+// last failure if the final look failed.
+//
+// A look that fails counts as one more try and not as the end. The
+// card is between networks right now, so a bad look is to be expected,
+// and the join itself already worked or it would have thrown.
+//
+// `read` is how it looks, so the tests can hand in a Mac that makes up
+// its mind slowly.
+export async function settle(read, networks, name, { tries = 12, ms = 500 } = {}) {
+  let wifi = null;
+  let error = null;
+  for (let i = 0; i < tries; i++) {
+    let seen = null;
+    try {
+      seen = await read();
+      wifi = seen;
+      error = null;
+    } catch (err) {
+      error = err;
+    }
+    if (seen && whichNetwork(seen.record, networks) === name) return { landed: true, wifi, error };
+    await new Promise((done) => setTimeout(done, ms));
+  }
+  return { landed: false, wifi, error };
 }
 
 // The name my passwords are filed under in the keychain. It's the
@@ -109,13 +138,18 @@ const KEYCHAIN = "wifi-toggle";
 // is in the System keychain and asks for my Mac password each time, so
 // the key gets a copy of its own. They're saved from Terminal with
 // `security add-generic-password`, never typed into Stream Deck.
-async function savedPassword(name) {
+async function savedPassword(name, run) {
   try {
-    const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", KEYCHAIN, "-a", name, "-w"]);
+    const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", KEYCHAIN, "-a", name, "-w"], { timeout: COMMAND_MS });
     return stdout.replace(/\n$/, "") || null;
-  } catch {
-    // `security` exits with an error when there's nothing under that name.
-    return null;
+  } catch (err) {
+    // Exit 44 is `security` saying there's nothing under that name.
+    // Anything else (a locked keychain, a command that hung) means I
+    // don't know, and guessing "no password" would send me to Terminal
+    // to save one I already saved. Node's own message is left out of
+    // the new error because it repeats the command.
+    if (err.code === 44) return null;
+    throw new Error(`Couldn't get the saved password for ${name} from the keychain`);
   }
 }
 
@@ -125,9 +159,9 @@ async function savedPassword(name) {
 // networksetup says nothing when it works. When it doesn't, it prints
 // the reason and still exits as if all was well, so any words at all
 // count as a failure.
-export async function join(name) {
-  const dev = await wifiDevice();
-  const password = await savedPassword(name);
+export async function join(name, { run = runCommand } = {}) {
+  const dev = await wifiDevice(run);
+  const password = await savedPassword(name, run);
   const args = ["-setairportnetwork", dev, name];
   if (password) args.push(password);
 
@@ -141,7 +175,9 @@ export async function join(name) {
     throw new Error(`networksetup gave up joining ${name}`);
   }
   if (said) {
-    const failed = new Error(said);
+    // The reason goes in the log, so if it quotes the password back
+    // it's blanked out first.
+    const failed = new Error(password ? said.replaceAll(password, "…") : said);
     failed.noPassword = !password;
     throw failed;
   }

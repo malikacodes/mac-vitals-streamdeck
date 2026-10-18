@@ -7,7 +7,7 @@ import { explain } from "./explain.js";
 import { deckChoices, whereToOpen } from "./pages.js";
 import { poll } from "./poll.js";
 import { readVitals, STATS, words } from "./vitals.js";
-import { join, nextNetwork, parseNetworks, readWifi, whichNetwork } from "./wifi.js";
+import { join, nextNetwork, parseNetworks, readWifi, settle, whichNetwork } from "./wifi.js";
 
 // Keep this at "info". The "trace" level writes every message between the
 // plugin and Stream Deck into the log file, and that includes the global
@@ -19,9 +19,6 @@ const NOTICE_MS = 2000;
 // How often the key looks at the Wi-Fi by itself, so it keeps up when I
 // change network from the menu bar or walk out of range.
 const LOOK_MS = 5000;
-// After a join, the Mac takes a moment to admit which network it's on.
-const SETTLE_TRIES = 12;
-const SETTLE_MS = 500;
 // How often the stat keys take a reading. Two seconds is quick enough
 // to feel live and slow enough that the looking doesn't show up in the
 // CPU number it's measuring.
@@ -33,8 +30,6 @@ function asImage(svg) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
-const wait = (ms) => new Promise((done) => setTimeout(done, ms));
-
 class SwitchKey extends SingletonAction {
   // Each key's list of networks, by the key's id.
   lists = new Map();
@@ -43,11 +38,19 @@ class SwitchKey extends SingletonAction {
   joining = null;
   notice = null;
   looking = null;
+  // The last reading that worked. A redraw that has no new reason to
+  // look (a notice clearing, a list changing) draws from this.
+  wifi = null;
 
   async onWillAppear(ev) {
     this.lists.set(ev.action.id, parseNetworks(ev.payload.settings?.networks));
-    await this.render();
-    this.looking ??= setInterval(() => this.render(), LOOK_MS);
+    // The timer takes its first look right away, and it's one look at
+    // a time, so a slow or failing read is logged once and the keys
+    // keep the picture they had.
+    this.looking ??= poll(() => this.render(), LOOK_MS, (line) => streamDeck.logger.error(`Couldn't read the Wi-Fi: ${line}`));
+    // A key that appears while the timer is already going draws now
+    // from the last reading, instead of waiting for the next tick.
+    if (this.wifi) await this.render(this.wifi);
   }
 
   onWillDisappear(ev) {
@@ -56,13 +59,15 @@ class SwitchKey extends SingletonAction {
     if (this.lists.size === 0) {
       clearInterval(this.looking);
       this.looking = null;
+      // An old reading would be drawn as current when a key comes back.
+      this.wifi = null;
     }
   }
 
   // Runs when I change the list on the settings page.
   async onDidReceiveSettings(ev) {
     this.lists.set(ev.action.id, parseNetworks(ev.payload.settings?.networks));
-    await this.render();
+    if (this.wifi) await this.render(this.wifi);
   }
 
   async onKeyDown(ev) {
@@ -84,47 +89,58 @@ class SwitchKey extends SingletonAction {
     const networks = this.lists.get(key.id) ?? [];
     if (networks.length === 0) return key.showAlert();
 
+    // The newest reading, so the key is redrawn from one that's fresh
+    // and nothing has to look again.
+    let now;
     try {
-      const wifi = await readWifi();
-      const next = nextNetwork(networks, whichNetwork(wifi.record, networks));
+      now = await readWifi();
+    } catch (err) {
+      // No join was tried, so this isn't "Can't join".
+      streamDeck.logger.error(`Couldn't read the Wi-Fi before switching: ${err.message}`);
+      return key.showAlert();
+    }
+    try {
+      const next = nextNetwork(networks, whichNetwork(now.record, networks));
       this.joining = next.name;
-      await this.render();
+      await this.render(now);
       await join(next.name);
       // Wait for the Mac to say it's on the new network before the key
       // lights up, so the key never claims a network too early.
-      for (let i = 0; i < SETTLE_TRIES; i++) {
-        const now = await readWifi();
-        if (whichNetwork(now.record, networks) === next.name) break;
-        await wait(SETTLE_MS);
-      }
-      this.joining = null;
+      const settled = await settle(readWifi, networks, next.name);
+      now = settled.wifi ?? now;
+      // The join went through but the Mac never said so. The key shows
+      // what it did see, and the log gets a line, because otherwise
+      // it's just a key that didn't change.
+      if (!settled.landed) streamDeck.logger.error(`Joined ${next.name}, but the Mac never said it was on it${settled.error ? ` (${settled.error.message})` : ""}`);
     } catch (err) {
       streamDeck.logger.error(`Couldn't switch Wi-Fi: ${err.message}`);
-      this.joining = null;
       // The two failures need different things from me: one is a
       // Terminal command, the other is being in range.
       this.notice = err.noPassword ? "No password" : "Can't join";
       setTimeout(() => {
         this.notice = null;
-        this.render();
+        if (this.wifi) this.render(this.wifi).catch((err) => streamDeck.logger.error(`Couldn't redraw: ${err.message}`));
       }, NOTICE_MS);
+    } finally {
+      this.joining = null;
     }
-    await this.render();
+    await this.render(now);
   }
 
-  // Looks at the Wi-Fi once and redraws every key from it.
-  async render() {
-    let wifi;
-    try {
-      wifi = await readWifi();
-    } catch (err) {
-      streamDeck.logger.error(`Couldn't read the Wi-Fi: ${err.message}`);
-      wifi = { power: false, connected: false, record: null };
-    }
+  // Redraws every key. Handed a reading, it draws from that. Without
+  // one it looks at the Wi-Fi itself, and if the look fails it throws
+  // and draws nothing: a read that failed is not "Wi-Fi off", so the
+  // keys keep the last picture they had.
+  async render(wifi) {
+    wifi ??= await readWifi();
+    this.wifi = wifi;
     for (const key of this.actions) {
       const networks = this.lists.get(key.id) ?? [];
       const name = whichNetwork(wifi.record, networks);
-      await key.setImage(asImage(drawKey({ networks, wifi: { ...wifi, name }, joining: this.joining, notice: this.notice })));
+      const picture = asImage(drawKey({ networks, wifi: { ...wifi, name }, joining: this.joining, notice: this.notice }));
+      // A key can vanish mid-draw (I flip to another page). That key
+      // is lost, but the keys after it still get theirs.
+      await key.setImage(picture).catch((err) => streamDeck.logger.error(`Couldn't draw a key: ${err.message}`));
     }
   }
 }
@@ -158,11 +174,7 @@ class StatKey extends SingletonAction {
     this.stat = stat;
   }
 
-  // The ids of this stat's keys that are on screen right now.
-  shown = new Set();
-
   async onWillAppear(ev) {
-    this.shown.add(ev.action.id);
     statKeys.add(this);
     await this.render();
     // One reading at a time. If the Mac is slow to answer, the next
@@ -171,9 +183,10 @@ class StatKey extends SingletonAction {
     reading ??= poll(takeReading, VITALS_MS, (line) => streamDeck.logger.error(`Couldn't take a reading: ${line}`));
   }
 
-  onWillDisappear(ev) {
-    this.shown.delete(ev.action.id);
-    if (this.shown.size === 0) statKeys.delete(this);
+  onWillDisappear() {
+    // The SDK has already taken this key out of the list by now, so an
+    // empty list means this stat has no keys on screen.
+    if (this.actions.length === 0) statKeys.delete(this);
     // No stat keys on screen, nothing to keep reading.
     if (statKeys.size === 0) {
       clearInterval(reading);
@@ -214,10 +227,10 @@ class StatKey extends SingletonAction {
   }
 
   sendWords() {
-    const words = explain(this.stat, history[this.stat], STATS[this.stat].top);
+    const text = explain(this.stat, history[this.stat], STATS[this.stat].top);
     // The page can close between the reading and the send. Then
     // there's nobody to tell, and that's fine.
-    streamDeck.ui.sendToPropertyInspector({ event: "explain", ...words }).catch(() => {});
+    streamDeck.ui.sendToPropertyInspector({ event: "explain", ...text }).catch(() => {});
   }
 
   async render() {

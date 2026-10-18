@@ -107,3 +107,24 @@ test("a command that keeps failing is logged once, and once when it recovers", a
   await readVitals({ run: fakeRun({ vm_stat: vmStat(300000), netstat: netstat(1, 1), ping: new Error("no reply") }), log });
   assert.equal(lines.length, 2);
 });
+
+// When every stat key leaves and comes back, the last look in memory
+// is from long ago. Comparing against it would put minutes of traffic
+// into one tick and show a made-up speed, so a look that old is
+// treated as no look at all.
+test("a look from long ago is not compared against", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const run = fakeRun({ vm_stat: vmStat(300000), netstat: netstat(1_000_000, 500_000), ping: pingReply });
+  await readVitals({ run });
+  t.mock.timers.tick(10 * 60 * 1000);
+  const back = await readVitals({ run: fakeRun({ vm_stat: vmStat(300000), netstat: netstat(900_000_000, 500_000_000), ping: pingReply }) });
+  assert.equal(back.cpu, null);
+  assert.equal(back.down, null);
+  assert.equal(back.up, null);
+  assert.equal(back.ping, 19.25);
+
+  // The look after that is a normal one again.
+  t.mock.timers.tick(2000);
+  const next = await readVitals({ run: fakeRun({ vm_stat: vmStat(300000), netstat: netstat(900_500_000, 500_100_000), ping: pingReply }) });
+  assert.equal(typeof next.down, "number");
+});

@@ -2,12 +2,8 @@
 // memory is in use, how fast data is moving, and how long the internet
 // takes to answer. The top half is plain functions the tests can run.
 // The bottom half asks the Mac.
-import { execFile } from "node:child_process";
 import os from "node:os";
-import { promisify } from "node:util";
-
-// Runs one of the Mac's commands and gives back what it printed.
-const runCommand = promisify(execFile);
+import { COMMAND_MS, run as runCommand } from "./run.js";
 
 // The stats, in the order they sit on my deck. `top` is the top of the
 // graph. The ones without it grow to fit whatever the last minute held,
@@ -113,15 +109,15 @@ export function words(stat, value) {
 // The last thing I looked at, to compare the next look against.
 let last = null;
 
+// A look older than this isn't compared against. The keys stop looking
+// when none are on screen, so after a while away the last look is
+// minutes old, and the traffic since would show up as one huge speed.
+// A slow tick takes a few seconds at most, so ten is well clear of one.
+const STALE_MS = 10_000;
+
 // The commands that failed last time, so a command that keeps failing
 // is written to the log once, when it starts, and not every two seconds.
 const failing = new Set();
-
-// How long a command gets before it's given up on. While the Wi-Fi is
-// changing networks, netstat can sit there for ages, and a reading
-// that never comes back is worse than a dash. Three seconds leaves
-// room for ping's own two second limit.
-const COMMAND_MS = 3000;
 
 // One look at everything. Returns { cpu, memory, down, up, ping }, with
 // null for anything that couldn't be read this time. The first look has
@@ -151,10 +147,11 @@ export async function readVitals({ run = runCommand, log = () => {} } = {}) {
     }
   }
 
-  const seconds = last ? (now.at - last.at) / 1000 : 0;
-  const speed = (way) => (last?.net && now.net ? mbps(last.net[way], now.net[way], seconds) : null);
+  const before = last && now.at - last.at >= 0 && now.at - last.at < STALE_MS ? last : null;
+  const seconds = before ? (now.at - before.at) / 1000 : 0;
+  const speed = (way) => (before?.net && now.net ? mbps(before.net[way], now.net[way], seconds) : null);
   const vitals = {
-    cpu: last ? cpuPercent(last.cores, now.cores) : null,
+    cpu: before ? cpuPercent(before.cores, now.cores) : null,
     memory: vm.status === "fulfilled" ? memoryUsed(vm.value.stdout) : null,
     down: speed("down"),
     up: speed("up"),

@@ -1,0 +1,228 @@
+import { test, mock } from "node:test";
+import assert from "node:assert/strict";
+import * as realWifi from "../src/wifi.js";
+import { drawKey } from "../src/draw.js";
+
+// index.js is the one file that talks to Stream Deck, so to try it
+// without a deck I swap in a stand-in for the SDK and for the two
+// functions that touch the Mac (readWifi and join). Everything else in
+// the file is the real code.
+const deck = { keys: [], errors: [], instances: [] };
+const mac = { read: null, join: null, reads: 0 };
+
+class SingletonAction {
+  get actions() {
+    return deck.keys;
+  }
+}
+mock.module("@elgato/streamdeck", {
+  namedExports: { action: () => (cls) => cls, SingletonAction },
+  defaultExport: {
+    logger: { setLevel() {}, error: (line) => deck.errors.push(line), warn() {}, info() {} },
+    actions: { registerAction: (it) => deck.instances.push(it) },
+    devices: [],
+    connect() {},
+  },
+});
+mock.module(new URL("../src/wifi.js", import.meta.url).href, {
+  namedExports: {
+    ...realWifi,
+    readWifi: async () => {
+      mac.reads++;
+      return mac.read();
+    },
+    join: async (name) => mac.join(name),
+  },
+});
+await import("../src/index.js");
+const switchKey = deck.instances[0];
+
+// The scan record the way wifi.test.js builds it: the name, tagged as text.
+const onNetwork = (name) => ({
+  power: true,
+  connected: true,
+  record: Buffer.concat([Buffer.from("bplist00"), Buffer.from([0x50 + name.length]), Buffer.from(name, "latin1")]),
+});
+
+// A key that remembers every picture it was given.
+function fakeKey(id) {
+  const key = { id, pictures: [], alerts: 0, broken: false };
+  key.setImage = async (picture) => {
+    if (key.broken) throw new Error(`key ${id} is gone`);
+    key.pictures.push(picture);
+  };
+  key.showAlert = async () => key.alerts++;
+  return key;
+}
+
+const appear = (key, networks = "Upstairs\nDownstairs") =>
+  switchKey.onWillAppear({ action: key, payload: { settings: { networks } } });
+const settle = () => new Promise((done) => setImmediate(done));
+
+function start(t) {
+  t.mock.timers.enable({ apis: ["setInterval", "setTimeout"] });
+  deck.keys = [fakeKey("a"), fakeKey("b")];
+  deck.errors.length = 0;
+  mac.reads = 0;
+  mac.read = async () => onNetwork("Upstairs");
+  mac.join = async () => {};
+  // Whatever a test leaves running is stopped here, so one test's
+  // timer can't wake up inside the next one.
+  t.after(() => {
+    for (const key of deck.keys) switchKey.onWillDisappear({ action: key });
+    switchKey.notice = null;
+    switchKey.joining = null;
+    switchKey.wifi = undefined;
+  });
+}
+
+// The plain case: every key on screen gets drawn from one look at the Wi-Fi.
+test("a key that appears is drawn, and so is every other key", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await appear(deck.keys[1]);
+  await settle();
+  for (const key of deck.keys) assert.ok(key.pictures.length > 0 && key.pictures.at(-1).startsWith("data:image/svg+xml;base64,"));
+});
+
+// A key can vanish in the middle of a redraw (I move to another page).
+// Its setImage fails, and that mustn't stop the keys after it or end the plugin.
+test("a key that is gone mid-draw doesn't stop the others", async (t) => {
+  start(t);
+  deck.keys[0].broken = true;
+  await appear(deck.keys[0]);
+  await appear(deck.keys[1]);
+  await settle();
+  assert.ok(deck.keys[1].pictures.length > 0, "the second key still got its picture");
+});
+
+// A read that fails is not the same as Wi-Fi being off. The key keeps
+// the last picture it had, and the log hears about it once.
+test("a failed read keeps the last picture and logs once", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  const before = [...deck.keys[0].pictures];
+  assert.ok(before.length > 0);
+
+  mac.read = async () => {
+    throw new Error("scutil hung");
+  };
+  for (let i = 0; i < 3; i++) {
+    t.mock.timers.tick(5000);
+    await settle();
+  }
+  assert.deepEqual(deck.keys[0].pictures, before, "nothing new was drawn, least of all 'Wi-Fi off'");
+  assert.equal(deck.errors.length, 1);
+});
+
+// A press looks at the Wi-Fi to know where it is, and once more to see
+// the join land. Redrawing in between uses what it already knows.
+test("a press that joins on the first try reads the Wi-Fi twice", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.reads = 0;
+  // Starts on Upstairs, and is on Downstairs after the join.
+  let joined = false;
+  mac.join = async () => (joined = true);
+  mac.read = async () => onNetwork(joined ? "Downstairs" : "Upstairs");
+  await switchKey.onKeyDown({ action: deck.keys[0] });
+  assert.equal(mac.reads, 2);
+});
+
+// A join that fails shows its notice, and two seconds later the notice
+// goes. That redraw must not need a fresh read to work.
+test("the notice clears with the Wi-Fi unreadable, and shows the last known picture", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.join = async () => {
+    throw new Error("Could not find network");
+  };
+  await switchKey.onKeyDown({ action: deck.keys[0] });
+  const withNotice = deck.keys[0].pictures.at(-1);
+
+  mac.read = async () => {
+    throw new Error("scutil hung");
+  };
+  t.mock.timers.tick(2000);
+  await settle();
+  const after = deck.keys[0].pictures.at(-1);
+  assert.notEqual(after, withNotice, "the notice is gone");
+  const networks = realWifi.parseNetworks("Upstairs\nDownstairs");
+  const expected = drawKey({ networks, wifi: { ...onNetwork("Upstairs"), name: "Upstairs" }, joining: null, notice: null });
+  assert.equal(after, `data:image/svg+xml;base64,${Buffer.from(expected).toString("base64")}`);
+});
+
+// Once every key has gone, the last reading is out of date. A key that
+// comes back must not be drawn from it while the new look is still on its way.
+test("a key that comes back doesn't get a reading from before it left", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  switchKey.onWillDisappear({ action: deck.keys[0] });
+  mac.read = () => new Promise(() => {});
+  const drawn = deck.keys[1].pictures.length;
+  await appear(deck.keys[1]);
+  assert.equal(deck.keys[1].pictures.length, drawn);
+});
+
+// Moves the clock through the settle loop's half-second waits until
+// the press has finished.
+async function pressThrough(t, key) {
+  let done = false;
+  const pressed = switchKey.onKeyDown({ action: key }).then(() => (done = true));
+  for (let i = 0; i < 20 && !done; i++) {
+    await settle();
+    t.mock.timers.tick(500);
+  }
+  await pressed;
+}
+
+// The join worked; it's only my looking afterwards that failed. Saying
+// "Can't join" would be untrue, and the old code said it.
+test("a read that fails after a good join is not a failed join", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.read = async () => {
+    if (mac.reads > 1) throw new Error("scutil hung");
+    return onNetwork("Upstairs");
+  };
+  mac.reads = 0;
+  await pressThrough(t, deck.keys[0]);
+  assert.equal(switchKey.notice, null);
+  assert.match(deck.errors.at(-1), /never said/);
+});
+
+// Twelve looks and the Mac still says the old network. The key goes
+// back to showing the truth, and the log hears about it. It used to
+// give up without a word.
+test("giving up on the settle is logged", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  deck.errors.length = 0;
+  await pressThrough(t, deck.keys[0]);
+  assert.equal(deck.errors.length, 1);
+  assert.match(deck.errors[0], /Downstairs/);
+  assert.ok(deck.keys[0].pictures.length > 1, "the key was drawn again from what the Mac did say");
+});
+
+// If the look before the join fails, no join was tried. "Can't join"
+// would blame the network, so the key just flashes its alert.
+test("a press whose first look fails shows the alert, not a join notice", async (t) => {
+  start(t);
+  await appear(deck.keys[0]);
+  await settle();
+  mac.read = async () => {
+    throw new Error("scutil hung");
+  };
+  let joinTried = false;
+  mac.join = async () => (joinTried = true);
+  await pressThrough(t, deck.keys[0]);
+  assert.equal(switchKey.notice, null);
+  assert.equal(deck.keys[0].alerts, 1);
+  assert.equal(joinTried, false);
+});
