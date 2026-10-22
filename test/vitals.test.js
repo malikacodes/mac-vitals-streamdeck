@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpuPercent, mbps, memoryUsed, netBytes, pingTime, words } from "../src/vitals.js";
+import { cpuPercent, mbps, memoryUsed, netBytes, pingTime, pressure, words } from "../src/vitals.js";
 
 const core = (user, sys, idle) => ({ times: { user, nice: 0, sys, idle, irq: 0 } });
 
@@ -88,4 +88,29 @@ test("readings turn into short words with the right unit", () => {
   assert.deepEqual(words("up", 0.0116), { value: "12", unit: "Kbps" });
   assert.deepEqual(words("up", 0), { value: "0", unit: "Kbps" });
   assert.deepEqual(words("ping", null), { value: "–", unit: "" });
+});
+
+// The real answer from my Mac on 2026-10-22: level 1, 67% available.
+// The key shows 33, so up means worse like every other key.
+test("pressure is 100 minus available, with the Mac's level", () => {
+  assert.deepEqual(pressure("1\n67\n"), { pressure: 33, level: 1 });
+  assert.deepEqual(pressure("4\n3"), { pressure: 97, level: 4 });
+  assert.deepEqual(pressure("2\n0\n"), { pressure: 100, level: 2 });
+});
+
+// Half a reading is no reading. A level the kernel never used, a
+// percent over 100, one line, or words, all come back null instead of
+// drawing a wrong color or a negative number.
+test("anything that doesn't make sense is null", () => {
+  for (const text of ["3\n50", "1\n130", "1", "", "normal\n50", "1\n-5", "1.5\n50"]) {
+    assert.equal(pressure(text), null, JSON.stringify(text));
+  }
+});
+
+// The widest pressure is 100, the same as CPU's widest, which already
+// fits beside its unit.
+test("pressure reads like CPU on the key", () => {
+  assert.deepEqual(words("pressure", 33), { value: "33", unit: "%" });
+  assert.deepEqual(words("pressure", 100), { value: "100", unit: "%" });
+  assert.deepEqual(words("pressure", null), { value: "–", unit: "" });
 });

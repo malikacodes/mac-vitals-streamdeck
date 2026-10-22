@@ -72,6 +72,22 @@
       ]
     },
     {
+      "UUID": "com.malikacodes.mac-vitals.pressure",
+      "Name": "Memory Pressure",
+      "Tooltip": "Whether the Mac is short of memory, the same call as Activity Monitor's colored graph",
+      "Icon": "imgs/pulse",
+      "Controllers": [
+        "Keypad"
+      ],
+      "UserTitleEnabled": false,
+      "PropertyInspectorPath": "ui/stat.html",
+      "States": [
+        {
+          "Image": "imgs/pulse-key"
+        }
+      ]
+    },
+    {
       "UUID": "com.malikacodes.mac-vitals.down",
       "Name": "Download",
       "Tooltip": "How fast data is coming in right now",

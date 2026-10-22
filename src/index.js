@@ -151,6 +151,11 @@ class SwitchKey extends SingletonAction {
 const history = Object.fromEntries(Object.keys(STATS).map((stat) => [stat, []]));
 const statKeys = new Set();
 let reading = null;
+// Memory pressure's level from the last reading that had one. A
+// reading that fails leaves it alone, so the pressure line keeps the
+// color it had instead of turning "normal" pink for a reading that
+// didn't work. The key's number shows the dash for that.
+let pressureLevel = null;
 // The stat key whose settings page is open, if one is. Stream Deck
 // shows one settings page at a time.
 let explaining = null;
@@ -161,6 +166,7 @@ async function takeReading() {
     history[stat].push(vitals[stat]);
     if (history[stat].length > HISTORY) history[stat].shift();
   }
+  pressureLevel = vitals.pressureLevel ?? pressureLevel;
   await Promise.all([...statKeys].map((key) => key.render()));
   // Keeps "Right now" on the open settings page in step with the key.
   explaining?.sendWords();
@@ -227,7 +233,7 @@ class StatKey extends SingletonAction {
   }
 
   sendWords() {
-    const text = explain(this.stat, history[this.stat], STATS[this.stat].top);
+    const text = explain(this.stat, history[this.stat], STATS[this.stat].top, pressureLevel);
     // The page can close between the reading and the send. Then
     // there's nobody to tell, and that's fine.
     streamDeck.ui.sendToPropertyInspector({ event: "explain", ...text }).catch(() => {});
@@ -241,6 +247,8 @@ class StatKey extends SingletonAction {
       ...words(this.stat, past.at(-1)),
       history: past,
       top: top ?? Math.max(floor, ...past.map((r) => r ?? 0)),
+      // Only the pressure key's line has a color of its own.
+      level: this.stat === "pressure" ? pressureLevel : undefined,
     });
     for (const key of this.actions) await key.setImage(asImage(picture));
   }

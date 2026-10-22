@@ -16,6 +16,7 @@ the number is fine, and what to do if it isn't.
 |---|---|
 | 🧠 CPU | How busy the processor is, 0 to 100% |
 | 🗂 Memory | Memory in use, the same number as Activity Monitor's "Memory Used" |
+| 🫧 Memory Pressure | Whether the Mac is short of memory: 100 minus the percent the Mac says is available. The line turns yellow at warning and red at critical |
 | ⬇️ Download | What's coming in right now, in Mbps |
 | ⬆️ Upload | What's going out right now |
 | 🏓 Ping | How long the internet takes to answer, in ms. A dash means no answer |
@@ -24,7 +25,7 @@ the number is fine, and what to do if it isn't.
 These pictures are drawn by the plugin's own drawing code, not
 photographed off the deck. The network names in them are made up.
 
-A press on any of the five stat keys opens the whole Mac Vitals page.
+A press on any of the six stat keys opens the whole Mac Vitals page.
 So one of them can live on another page and be the door to the rest.
 Each key's settings have an "Open on" menu for which deck the page
 opens on: Memory sits on my XL's Home page and brings the page up on my
@@ -137,6 +138,14 @@ key press → wifi.js (which network now? join the next) → draw.js → the Wi-
   internet is struggling.
 - **CPU is judged on the whole minute.** Opening an app sends it to
   100% for a second. That isn't a problem and shouldn't read like one.
+- **Pressure is the Mac's own call.** Memory in use can sit at 80% on a
+  Mac that's perfectly fine, because macOS fills spare memory on purpose
+  and gives it back when an app asks. The Pressure key's color and
+  verdict come straight from the kernel's level, the one behind Activity
+  Monitor's colored graph, not from a cut-off of mine. Its number is
+  `100 - available` so that up means worse on every key, which also
+  means it isn't a number Apple shows anywhere. The details are in
+  `docs/memory-pressure-key-prd.md`.
 - **The cut-offs are rules of thumb.** 85% CPU, 90% memory, 250 ms
   ping: they're where things usually start to feel different, not
   numbers from a manual. Memory is judged as a share of the Mac's

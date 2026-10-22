@@ -85,7 +85,7 @@ test("every command is run with a time limit", async () => {
     return { stdout: "", stderr: "" };
   };
   await readVitals({ run });
-  assert.equal(options.length, 3);
+  assert.equal(options.length, 4);
   for (const opts of options) assert.ok(opts.timeout > 0 && opts.timeout <= 3000);
 });
 
@@ -127,4 +127,34 @@ test("a look from long ago is not compared against", async (t) => {
   t.mock.timers.tick(2000);
   const next = await readVitals({ run: fakeRun({ vm_stat: vmStat(300000), netstat: netstat(900_500_000, 500_100_000), ping: pingReply }) });
   assert.equal(typeof next.down, "number");
+});
+
+// The pressure reading comes from one sysctl call and gives two
+// numbers: the percent for the graph, and the level for the color.
+test("sysctl gives pressure as 100 minus available, and the level", async () => {
+  const vitals = await readVitals({ run: fakeRun({ sysctl: "2\n18\n" }) });
+  assert.equal(vitals.pressure, 82);
+  assert.equal(vitals.pressureLevel, 2);
+});
+
+// A sysctl that answers with something I can't read is a failure: a
+// dash on the key, and one line in the log, not a dash and silence.
+test("sysctl answering nonsense is logged once and reads as null", async () => {
+  const lines = [];
+  const log = (line) => lines.push(line);
+  for (let i = 0; i < 3; i++) {
+    const vitals = await readVitals({ run: fakeRun({ sysctl: "3\n50\n" }), log });
+    assert.equal(vitals.pressure, null);
+    assert.equal(vitals.pressureLevel, null);
+  }
+  assert.equal(lines.filter((line) => line.startsWith("sysctl")).length, 1);
+  await readVitals({ run: fakeRun({ sysctl: "1\n60\n" }), log });
+  assert.ok(lines.at(-1).startsWith("sysctl is answering again"));
+});
+
+// sysctl failing outright mustn't take the other readings down with it.
+test("sysctl failing leaves pressure null and the rest alone", async () => {
+  const vitals = await readVitals({ run: fakeRun({ sysctl: new Error("timed out"), vm_stat: vmStat(300000) }) });
+  assert.equal(vitals.pressure, null);
+  assert.ok(vitals.memory > 0);
 });

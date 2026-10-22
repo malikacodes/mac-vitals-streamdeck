@@ -11,6 +11,14 @@ const DIM = "#5c5c62";
 // The same pink as my Pomodoro heat map and my audio dial, so the
 // graphs match when the keys sit next to them.
 const PINK = "#f2a7c3";
+// Memory pressure's warning and critical, the only other colors on
+// these keys, because they're the pressure key's information. Normal
+// stays pink, so on an ordinary day the pressure key looks like its
+// neighbors. The yellow is the settings page's "watch" color. The red
+// is a deeper one than the page's "bad": the page's salmon red sat too
+// close to pink on a thin line, and critical is the one level I must
+// not miss.
+const LEVEL_COLORS = { 1: PINK, 2: "#f2c66d", 4: "#d92b2b" };
 
 // Where a stat key's graph sits, and how many readings wide it is. At
 // one reading every 2 seconds, 30 of them is the last minute.
@@ -126,7 +134,9 @@ export function drawKey({ networks = [], wifi = {}, joining, notice } = {}) {
 //   unit     "%"
 //   history  the last readings, oldest first, null for a missed one
 //   top      the reading that touches the top of the graph
-export function drawStat({ label = "", value = "–", unit = "", history = [], top = 100 } = {}) {
+//   level    memory pressure's level (1, 2 or 4), for the pressure key
+//            only. It colors the line. Without one the line is pink.
+export function drawStat({ label = "", value = "–", unit = "", history = [], top = 100, level } = {}) {
   // The newest reading is pinned to the right edge and older ones trail
   // off to the left, so a key that just appeared draws a short line
   // that grows, and doesn't stretch two readings across the whole key.
@@ -147,7 +157,7 @@ export function drawStat({ label = "", value = "–", unit = "", history = [], t
     `<text x="14" y="78" font-size="40" font-weight="700" fill="${WHITE}">${safe(value)}<tspan font-size="19" font-weight="600" fill="${DIM}" dx="4">${safe(unit)}</tspan></text>`,
     // One reading can't make a line, so it waits for the second.
     points.length > 1
-      ? `<path d="M${points.join(" L")}" fill="none" stroke="${PINK}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`
+      ? `<path d="M${points.join(" L")}" fill="none" stroke="${LEVEL_COLORS[level] ?? PINK}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`
       : "",
     `</svg>`,
   ].join("");

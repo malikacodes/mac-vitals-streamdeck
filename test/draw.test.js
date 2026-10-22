@@ -136,3 +136,19 @@ test("no line until there are two readings", () => {
   assert.ok(!drawStat({ history: [40] }).includes("<path"));
   assert.ok(drawStat().includes(">–<"));
 });
+
+// The pressure key's line color is its warning: pink at normal like the
+// keys around it, yellow at warning, red at critical.
+test("the pressure level colors the line", () => {
+  const stroke = (level) => drawStat({ history: [30, 40], level }).match(/stroke="(#\w+)"/)[1];
+  assert.equal(stroke(1), "#f2a7c3");
+  assert.equal(stroke(2), "#f2c66d");
+  assert.equal(stroke(4), "#d92b2b");
+});
+
+// Every other stat key is drawn without a level and has to stay pink.
+// A level the drawing doesn't know is pink too, not a missing stroke.
+test("no level, or an unknown one, draws pink", () => {
+  assert.ok(drawStat({ history: [30, 40] }).includes('stroke="#f2a7c3"'));
+  assert.ok(drawStat({ history: [30, 40], level: 3 }).includes('stroke="#f2a7c3"'));
+});

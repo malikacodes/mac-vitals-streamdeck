@@ -20,6 +20,11 @@ const ABOUT = {
     normal: ["Under 75% of the total: plenty of room", "75 to 90%: getting full", "Over 90%: full, and the Mac starts to feel slow"],
     todo: "Close apps and browser tabs I'm not using. Activity Monitor's Memory tab shows the biggest ones. If it's still full after that, restart the Mac.",
   },
+  pressure: {
+    what: "Whether the Mac has enough memory for what's open. It's the Mac's own call, the same one behind the colored graph in Activity Monitor's Memory tab. The number is 100 minus the percent of memory the Mac says is available, so higher is worse.",
+    normal: ["Normal: nothing to do, however full the Memory key looks", "Warning: the Mac is compressing and swapping to make room", "Critical: it's out of room, and apps slow down or get asked to quit"],
+    todo: "Open Activity Monitor's Memory tab, sort by Memory, and quit the apps at the top that I'm not using. If it stays at warning or critical with little open, restart the Mac.",
+  },
   down: {
     what: "How much is coming in from the internet right now: videos, pages, downloads. It's the speedometer, not the top speed.",
     normal: ["Near zero when nothing is loading. That's normal, not slow", "A video in HD uses about 5 Mbps", "A video in 4K uses about 25 Mbps"],
@@ -46,7 +51,8 @@ function average(readings) {
 // One word for how things are, a tone for its color, and a sentence on
 // what that means for me.
 //   tone  "good", "watch", "bad", or "plain" when there's no good or bad
-function verdict(stat, history, top) {
+//   level memory pressure's level, only used for the pressure key
+function verdict(stat, history, top, level) {
   const latest = history.at(-1);
 
   if (stat === "ping") {
@@ -75,6 +81,15 @@ function verdict(stat, history, top) {
     return { word: "Maxed out", tone: "bad", means: "It's been flat out for the last minute. The fans and the lag are this." };
   }
 
+  // Pressure's verdict is the Mac's own, not cut-offs of mine. It's the
+  // latest level, not the minute's average: the kernel already smooths
+  // it, and a warning should show as soon as it starts.
+  if (stat === "pressure") {
+    if (level === 2) return { word: "Warning", tone: "watch", means: "The Mac is compressing and swapping to keep up. Worth closing what I'm not using." };
+    if (level === 4) return { word: "Critical", tone: "bad", means: "The Mac is out of memory. Apps will slow down or be asked to quit." };
+    return { word: "Normal", tone: "good", means: "The Mac has the memory it needs. Nothing to do." };
+  }
+
   if (stat === "memory") {
     const full = (latest / top) * 100;
     const share = `${Math.round(full)}% of ${words("memory", top).value} GB`;
@@ -93,11 +108,12 @@ function verdict(stat, history, top) {
 // Everything the settings page shows for one stat.
 //   history  the last minute of readings, oldest first
 //   top      the most this stat can be (all the Mac's memory, for memory)
-export function explain(stat, history = [], top) {
+//   level    memory pressure's last level, for the pressure key
+export function explain(stat, history = [], top, level) {
   const now = words(stat, history.at(-1));
   return {
     ...ABOUT[stat],
     now: `${now.value} ${now.unit}`.trim(),
-    ...verdict(stat, history, top),
+    ...verdict(stat, history, top, level),
   };
 }
