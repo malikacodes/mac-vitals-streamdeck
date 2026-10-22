@@ -15,3 +15,4 @@ can redo it without rediscovering every wall.
 | 07 | 2026-10-17 | [A locked keychain is not "no password"](07-a-locked-keychain-is-not-no-password.md) |
 | 08 | 2026-10-17 | [Waiting for a join to land](08-waiting-for-a-join-to-land.md) |
 | 09 | 2026-10-17 | [One list of keys](09-one-list-of-keys.md) |
+| 10 | 2026-10-22 | [Memory pressure](10-memory-pressure.md) |
