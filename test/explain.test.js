@@ -8,7 +8,7 @@ const minute = (value) => Array(30).fill(value);
 // Every stat has to come with all four parts, or its settings page has
 // an empty row and I'm back to guessing what the key is.
 test("every stat explains what it is, what's normal and what to do", () => {
-  for (const stat of ["cpu", "memory", "down", "up", "ping"]) {
+  for (const stat of ["cpu", "memory", "pressure", "down", "up", "ping"]) {
     const told = explain(stat, [], 16 * GB);
     assert.ok(told.what.length > 20, stat);
     assert.ok(told.normal.length >= 3, stat);
@@ -20,7 +20,7 @@ test("every stat explains what it is, what's normal and what to do", () => {
 // A brand new key has no readings yet. It should say so, not call an
 // empty list "calm" or "no answer".
 test("with no readings yet it says it's checking", () => {
-  for (const stat of ["cpu", "memory", "down", "up", "ping"]) {
+  for (const stat of ["cpu", "memory", "pressure", "down", "up", "ping"]) {
     assert.equal(explain(stat, [], 16 * GB).word, "Checking", stat);
     assert.equal(explain(stat, [], 16 * GB).now, "–", stat);
   }
@@ -74,4 +74,21 @@ test("ping is judged on the minute's average", () => {
   assert.equal(explain("ping", minute(70)).word, "Fine");
   assert.equal(explain("ping", minute(180)).tone, "watch");
   assert.equal(explain("ping", minute(400)).tone, "bad");
+});
+
+// Pressure's verdict is the Mac's own level, not a cut-off of mine, and
+// the number beside it is the percent on the key.
+test("pressure's verdict comes from the Mac's level", () => {
+  assert.deepEqual(
+    (({ word, tone, now }) => ({ word, tone, now }))(explain("pressure", [33], 100, 1)),
+    { word: "Normal", tone: "good", now: "33 %" },
+  );
+  assert.equal(explain("pressure", [70], 100, 2).tone, "watch");
+  assert.equal(explain("pressure", [95], 100, 4).word, "Critical");
+});
+
+// The level is judged as it is now, not averaged over the minute. A
+// warning after a calm minute is a warning straight away.
+test("one warning after a calm minute is a warning", () => {
+  assert.equal(explain("pressure", [...Array(29).fill(30), 60], 100, 2).word, "Warning");
 });

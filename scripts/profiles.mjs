@@ -27,9 +27,9 @@ export const DEVICES = {
 };
 
 // Stream Deck's own Switch Profile action, pointed at my Home profile on
-// each deck, so there's always a way back. It gets a picture of its own
-// (home.svg, next to this file) because Stream Deck's stock icon for it
-// isn't on a black background and has no room for a word. A profile id only means
+// each deck, so there's always a way back. Its picture (home.svg, next
+// to this file) is Stream Deck's own white house, copied onto pure
+// black, because the stock key isn't on black. A profile id only means
 // something on the Mac it was made on, so these two are mine. Each sits
 // where the Home key is on my other profiles for that deck: top left on
 // the XL, top right on the +.
@@ -54,6 +54,7 @@ export const PROFILES = {
       [0, 0, ...HOME_XL],
       [1, 0, "cpu", {}],
       [2, 0, "memory", {}],
+      [3, 0, "pressure", {}],
       [4, 0, "down", {}],
       [5, 0, "up", {}],
       [6, 0, "ping", {}],
@@ -71,6 +72,7 @@ export const PROFILES = {
       [0, 1, "down", {}],
       [1, 1, "up", {}],
       [2, 1, "ping", {}],
+      [3, 1, "pressure", {}],
     ],
   },
 };
